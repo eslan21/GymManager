@@ -1,17 +1,17 @@
 'use client'
 import EditForm from "../components/EditForm"
 import { use } from 'react'
-export default  function page({params}) {
+export default function Page({ params }) {
 
 
-    const {edictuser} = use(params) ;
-    
+  const { edictuser } = use(params);
+
 
   return (
     <>
-    <EditForm
-        id = {edictuser}
-    />
+      <EditForm
+        id={edictuser}
+      />
     </>
   )
 }
