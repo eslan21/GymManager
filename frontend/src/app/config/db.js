@@ -5,21 +5,21 @@ import { setContext } from '@apollo/client/link/context';
 
 // Configuración del enlace HTTP para conectar con el servidor GraphQL
 const httpLink = createHttpLink({
-    uri: 'http://localhost:4000', // Endpoint GraphQL en localhost
+    uri: process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'
 });
 
 // Configuración del contexto para propagar los headers
-const authLink =  setContext(async (_, { headers }) => {
+const authLink = setContext(async (_, { headers }) => {
     // Aquí puedes obtener el token de autenticación desde el almacenamiento local o cualquier otra fuente
     const url = process.env.URL || 'http://localhost:3000'
     const api = await fetch(url + '/api/gettoken')
     const resp = await api.json()
     let token = resp.token
-   
- 
 
-    
-   
+
+
+
+
     return {
         headers: {
             ...headers,
