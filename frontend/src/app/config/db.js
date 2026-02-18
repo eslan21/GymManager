@@ -11,15 +11,30 @@ const httpLink = createHttpLink({
 // Configuración del contexto para propagar los headers
 const authLink = setContext(async (_, { headers }) => {
     // Aquí puedes obtener el token de autenticación desde el almacenamiento local o cualquier otra fuente
-    const url = process.env.URL || 'http://localhost:3000'
-    const api = await fetch(url + '/api/gettoken')
-    const resp = await api.json()
-    let token = resp.token
+    let token = '';
 
+    try {
+        // Determine the base URL
+        let baseUrl = '';
+        if (typeof window === 'undefined') {
+            // Server-side: Use Vercel URL or fallback to localhost
+            // Vercel sets VERCEL_URL (without https://)
+            if (process.env.VERCEL_URL) {
+                baseUrl = `https://${process.env.VERCEL_URL}`;
+            } else {
+                baseUrl = process.env.URL || 'http://localhost:3000';
+            }
+        }
+        // Client-side: use relative path (empty string)
 
-
-
-
+        const api = await fetch(`${baseUrl}/api/gettoken`);
+        if (api.ok) {
+            const resp = await api.json();
+            token = resp.token;
+        }
+    } catch (error) {
+        console.error("Error obtaining token:", error);
+    }
     return {
         headers: {
             ...headers,
