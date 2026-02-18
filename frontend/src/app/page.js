@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { Bars3Icon, XMarkIcon, BoltIcon, FireIcon, TicketIcon, CheckIcon } from '@heroicons/react/24/outline';
 
@@ -275,7 +276,7 @@ export default function LandingPage() {
         {/* Call To Action Section */}
         <div className="relative isolate overflow-hidden bg-gray-900 px-6 py-24 shadow-2xl sm:px-24 xl:py-32">
           <div className="absolute inset-0 -z-10 bg-gradient-to-t from-gray-800 to-gray-900 opacity-20"></div>
-          <img
+          <Image
             src="https://images.unsplash.com/photo-1571902943202-507ec2618e8f?q=80&w=2575&auto=format&fit=crop"
             alt=""
             className="absolute inset-0 -z-20 h-full w-full object-cover object-center opacity-10"
