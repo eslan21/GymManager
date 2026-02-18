@@ -78,7 +78,9 @@ export default function LoginForm() {
 
           /***** Construyendo fecth para las cookies */
 
-          const response = await fetch('http://localhost:3000/api/auth', {
+          const response = await fetch(process.env.NEXT_PUBLIC_VERCEL_URL
+            ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}/api/auth`
+            : 'http://localhost:3000/api/auth', {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
