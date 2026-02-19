@@ -1,6 +1,11 @@
 const { ApolloServer } = require('apollo-server-micro');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
+const cors = require('micro-cors')({
+    allowMethods: ['POST', 'GET', 'OPTIONS'],
+    allowHeaders: ['content-type', 'authorization', 'x-api-key'],
+    origin: '*', // Permitir todas las conexiones o configurar según necesidad
+});
 require('dotenv').config();
 
 const typeDefs = require('../db/schema');
@@ -39,11 +44,19 @@ const server = new ApolloServer({
 
 const startServer = server.start();
 
-module.exports = async (req, res) => {
+const handler = async (req, res) => {
     await connectDB();
     await startServer;
+
+    if (req.method === 'OPTIONS') {
+        res.end();
+        return;
+    }
+
     await server.createHandler({ path: '/api' })(req, res);
 };
+
+module.exports = cors(handler);
 
 // Configuración de micro para no parsear el body (Apollo lo maneja)
 module.exports.config = {
