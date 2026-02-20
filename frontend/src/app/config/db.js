@@ -5,7 +5,7 @@ import { setContext } from '@apollo/client/link/context';
 
 // Configuración del enlace HTTP para conectar con el servidor GraphQL
 const httpLink = createHttpLink({
-    uri: process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'
+    uri: process.env.NEXT_PUBLIC_BACKEND_URI || 'http://localhost:4000'
 });
 
 // Configuración del contexto para propagar los headers
