@@ -33,15 +33,28 @@ const server = new ApolloServer({
         const user = getUser(token);
         return { user };
     },
-    introspection: true, // Habilitar playground en producción si se desea
-    playground: true,
+    introspection: true,
 });
 
 const startServer = server.start();
 
 module.exports = async (req, res) => {
     await connectDB();
+
+    // Configuración de CORS
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
+
+    if (req.method === 'OPTIONS') {
+        res.end();
+        return false;
+    }
+
     await startServer;
+
+    // Manejar el path /api porque el rewrite de Vercel (o la ruta por defecto) usa /api
     await server.createHandler({ path: '/api' })(req, res);
 };
 
