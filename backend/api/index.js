@@ -60,8 +60,9 @@ module.exports = async (req, res) => {
 
     await startServer;
 
-    // Manejar el path /api porque el rewrite de Vercel (o la ruta por defecto) usa /api
-    await server.createHandler({ path: '/api' })(req, res);
+    // Configurar el path de Apollo Server dinámicamente según la petición que llegue
+    const requestPath = req.url ? req.url.split('?')[0] : '/';
+    await server.createHandler({ path: requestPath })(req, res);
 };
 
 // Configuración de micro para no parsear el body (Apollo lo maneja)
