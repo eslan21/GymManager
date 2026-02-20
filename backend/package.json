@@ -9,7 +9,7 @@
     "start": "node index.js"
   },
   "engines": {
-    "node": "22.x"
+    "node": "24.x"
   },
   "author": "Freddy Torrealba",
   "license": "ISC",
