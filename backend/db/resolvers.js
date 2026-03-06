@@ -116,6 +116,12 @@ const resolvers = {
         throw new Error("Ocurrió un error al buscar el código QR.");
       }
     },
+    getMe: async (_, __, ctx) => {
+      if (!ctx.user) {
+        throw new Error("No autenticado");
+      }
+      return await User.findById(ctx.user.id);
+    },
     findQRByAdmin: async (_, { id }) => {
       let qr;
       if (!id) throw new Error("No se proporciono id");

@@ -4,30 +4,26 @@ import QRCode from "./components/QRCode";
 import MembershipStatus from "./components/MembershipStatus";
 
 // Query para obtener datos del usuario
-const GET_USER_DATA = gql`
-  query getUserData {
-    findQR {
-      user {
-        isActive
-        membershipExpiresAt
-      }
+const GET_ME = gql`
+  query getMe {
+    getMe {
+      isActive
+      membershipExpiresAt
+      fullName
     }
   }
 `;
 
 export default function Dashboard() {
-  const { data, loading, error } = useQuery(GET_USER_DATA);
+  const { data, loading, error } = useQuery(GET_ME);
 
   // Si está cargando, podemos mostrar un esqueleto o texto simple
   // Pero como QRCode también hace sus propias queries, podemos renderizarlo
   // y pasar undefined a MembershipStatus hasta que cargue.
 
   // NOTA: QRCode.js hace su propia query (findQR). 
-  // Idealmente, deberíamos hacer una sola query en el padre y pasar datos, 
-  // pero para no refactorizar QRCode.js completamente ahora, 
-  // usaremos la misma query para obtener los datos extra que necesitamos.
 
-  const userData = data?.findQR?.user;
+  const userData = data?.getMe;
 
   return (
     <div className="p-6">

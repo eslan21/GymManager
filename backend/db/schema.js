@@ -110,7 +110,11 @@ const typeDefs = gql`
     # Obtener QR
      findQR : QRGenerated
      findQRByAdmin(id:ID!):QRGenerated
-  
+     
+    """
+    Obtiene los datos del usuario actual
+    """
+    getMe: User
     
   }
 
