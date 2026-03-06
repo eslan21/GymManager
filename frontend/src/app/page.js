@@ -7,9 +7,17 @@ import { Bars3Icon, XMarkIcon, BoltIcon, FireIcon, TicketIcon, CheckIcon } from 
 
 const navigation = [
   { name: 'Features', href: '#features' },
+  { name: 'Schedule', href: '#schedule' },
   { name: 'Classes', href: '#classes' },
 
   { name: 'Trainers', href: '#trainers' },
+];
+
+const schedule = [
+  { day: 'Monday - Friday', hours: '5:00 AM - 11:00 PM' },
+  { day: 'Saturday', hours: '6:00 AM - 10:00 PM' },
+  { day: 'Sunday', hours: '7:00 AM - 8:00 PM' },
+  { day: 'Holidays', hours: '8:00 AM - 4:00 PM' },
 ];
 
 const features = [
@@ -227,6 +235,31 @@ export default function LandingPage() {
                 </div>
               ))}
             </dl>
+          </div>
+        </div>
+
+        {/* Schedule Section */}
+        <div id="schedule" className="mx-auto max-w-7xl px-6 lg:px-8 py-24 sm:py-32 border-t border-white/10">
+          <div className="mx-auto max-w-2xl lg:text-center">
+            <h2 className="text-base font-semibold leading-7 text-indigo-400">Opening Hours</h2>
+            <p className="mt-2 text-3xl font-bold tracking-tight text-white sm:text-4xl">
+              Train on your own time
+            </p>
+            <p className="mt-6 text-lg leading-8 text-gray-300">
+              We offer flexible hours to accommodate any busy lifestyle. Come in early or stay late, we are here for you.
+            </p>
+          </div>
+          <div className="mx-auto mt-16 max-w-2xl sm:mt-20 lg:max-w-4xl">
+            <div className="rounded-2xl bg-gray-800/50 p-8 ring-1 ring-inset ring-white/10 sm:p-10">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {schedule.map((item) => (
+                  <div key={item.day} className="rounded-xl bg-gray-900 p-6 text-center ring-1 ring-inset ring-white/10 transition-all duration-300 hover:ring-indigo-500 hover:shadow-[0_0_15px_rgba(99,102,241,0.5)] transform hover:-translate-y-1">
+                    <h3 className="text-sm font-semibold leading-6 text-indigo-400 border-b border-gray-800 pb-3 mb-3">{item.day}</h3>
+                    <p className="text-base font-bold tracking-tight text-white">{item.hours}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 
