@@ -2,6 +2,7 @@
 import { CheckCircleIcon, XCircleIcon, CalendarIcon } from '@heroicons/react/24/outline';
 
 export default function MembershipStatus({ user }) {
+    console.log(user)
     if (!user) return null;
 
     const { membershipExpiresAt, isActive } = user;
@@ -38,8 +39,8 @@ export default function MembershipStatus({ user }) {
                 <div className="flex items-center justify-between mb-6">
                     <div className="text-gray-300">Estado</div>
                     <div className={`flex items-center px-3 py-1 rounded-full text-sm font-semibold ${isActive && !isExpired
-                            ? 'bg-green-900/50 text-green-400 border border-green-700'
-                            : 'bg-red-900/50 text-red-400 border border-red-700'
+                        ? 'bg-green-900/50 text-green-400 border border-green-700'
+                        : 'bg-red-900/50 text-red-400 border border-red-700'
                         }`}>
                         {isActive && !isExpired ? (
                             <>

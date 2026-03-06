@@ -8,7 +8,7 @@ import { Bars3Icon, XMarkIcon, BoltIcon, FireIcon, TicketIcon, CheckIcon } from 
 const navigation = [
   { name: 'Features', href: '#features' },
   { name: 'Classes', href: '#classes' },
-  { name: 'Pricing', href: '#pricing' },
+
   { name: 'Trainers', href: '#trainers' },
 ];
 
@@ -33,52 +33,9 @@ const features = [
   },
 ];
 
-const pricing = [
-  {
-    name: 'Basic',
-    id: 'tier-basic',
-    href: '/register',
-    priceMonthly: '$29',
-    description: 'Everything necessary to get started.',
-    features: ['Access to gym floor', 'Locker room access', '1 Free personal training session', 'Open 24/7'],
-    mostPopular: false,
-  },
-  {
-    name: 'Pro',
-    id: 'tier-pro',
-    href: '/register',
-    priceMonthly: '$59',
-    description: 'The best value key to your best self.',
-    features: [
-      'All Basic features',
-      'Unlimited group classes',
-      'Sauna & Steam room access',
-      ' Nutrition consultation',
-      'Guest passes included',
-    ],
-    mostPopular: true,
-  },
-  {
-    name: 'Elite',
-    id: 'tier-elite',
-    href: '/register',
-    priceMonthly: '$99',
-    description: 'Dedicated support and infrastructure for your company.',
-    features: [
-      'All Pro features',
-      'Unlimited personal training',
-      'Private locker',
-      'Towel service',
-      'Priority class booking',
-      'Access to VIP lounge',
-    ],
-    mostPopular: false,
-  },
-];
 
-function classNames(...classes) {
-  return classes.filter(Boolean).join(' ');
-}
+
+
 
 export default function LandingPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -280,6 +237,9 @@ export default function LandingPage() {
             src="https://images.unsplash.com/photo-1571902943202-507ec2618e8f?q=80&w=2575&auto=format&fit=crop"
             alt=""
             className="absolute inset-0 -z-20 h-full w-full object-cover object-center opacity-10"
+            width={1200}
+            height={800}
+
           />
 
           <h2 className="mx-auto max-w-2xl text-center text-3xl font-bold tracking-tight text-white sm:text-4xl">
@@ -303,121 +263,11 @@ export default function LandingPage() {
           </div>
         </div>
 
-        {/* Pricing Section */}
-        <div id="pricing" className="bg-gray-900 py-24 sm:py-32">
-          <div className="mx-auto max-w-7xl px-6 lg:px-8">
-            <div className="mx-auto max-w-4xl text-center">
-              <h2 className="text-base font-semibold leading-7 text-indigo-400">Pricing</h2>
-              <p className="mt-2 text-4xl font-bold tracking-tight text-white sm:text-5xl">
-                Choose the right plan for you
-              </p>
-            </div>
-            <p className="mx-auto mt-6 max-w-2xl text-center text-lg leading-8 text-gray-300">
-              Transparent pricing with no hidden fees. Cancel anytime.
-            </p>
-            <div className="isolate mx-auto mt-16 grid max-w-md grid-cols-1 gap-y-8 sm:mt-20 lg:mx-0 lg:max-w-none lg:grid-cols-3">
-              {pricing.map((tier, tierIdx) => (
-                <div
-                  key={tier.id}
-                  className={classNames(
-                    tier.mostPopular ? 'bg-white/5 ring-2 ring-indigo-500' : 'ring-1 ring-white/10',
-                    'rounded-3xl p-8 xl:p-10'
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-x-4">
-                    <h3 id={tier.id} className="text-lg font-semibold leading-8 text-white">
-                      {tier.name}
-                    </h3>
-                    {tier.mostPopular ? (
-                      <p className="rounded-full bg-indigo-500 px-2.5 py-1 text-xs font-semibold leading-5 text-white">
-                        Most popular
-                      </p>
-                    ) : null}
-                  </div>
-                  <p className="mt-4 text-sm leading-6 text-gray-300">{tier.description}</p>
-                  <p className="mt-6 flex items-baseline gap-x-1">
-                    <span className="text-4xl font-bold tracking-tight text-white">{tier.priceMonthly}</span>
-                    <span className="text-sm font-semibold leading-6 text-gray-300">/month</span>
-                  </p>
-                  <a
-                    href={tier.href}
-                    aria-describedby={tier.id}
-                    className={classNames(
-                      tier.mostPopular
-                        ? 'bg-indigo-500 text-white shadow-sm hover:bg-indigo-400 focus-visible:outline-indigo-500'
-                        : 'bg-white/10 text-white hover:bg-white/20 focus-visible:outline-white',
-                      'mt-6 block rounded-md px-3 py-2 text-center text-sm font-semibold leading-6 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2'
-                    )}
-                  >
-                    Buy plan
-                  </a>
-                  <ul role="list" className="mt-8 space-y-3 text-sm leading-6 text-gray-300 xl:mt-10">
-                    {tier.features.map((feature) => (
-                      <li key={feature} className="flex gap-x-3">
-                        <CheckIcon className="h-6 w-5 flex-none text-white" aria-hidden="true" />
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+
 
       </main>
 
-      {/* Footer */}
-      <footer className="bg-gray-900 border-t border-white/10" aria-labelledby="footer-heading">
-        <h2 id="footer-heading" className="sr-only">
-          Footer
-        </h2>
-        <div className="mx-auto max-w-7xl px-6 pb-8 pt-16 sm:pt-24 lg:px-8 lg:pt-32">
-          <div className="xl:grid xl:grid-cols-3 xl:gap-8">
-            <div className="space-y-8">
-              <a href="#" className="flex items-center gap-2">
-                <div className="h-8 w-8 bg-indigo-600 rounded-lg flex items-center justify-center">
-                  <span className="font-bold text-xl text-white">G</span>
-                </div>
-                <span className="font-bold text-xl tracking-tight text-white">GymApp</span>
-              </a>
-              <p className="text-sm leading-6 text-gray-300">
-                Making the world a healthier place, one workout at a time.
-              </p>
-            </div>
-            <div className="mt-16 grid grid-cols-2 gap-8 xl:col-span-2 xl:mt-0">
-              <div className="md:grid md:grid-cols-2 md:gap-8">
-                <div>
-                  <h3 className="text-sm font-semibold leading-6 text-white">Solutions</h3>
-                  <ul role="list" className="mt-6 space-y-4">
-                    {navigation.slice(0, 2).map((item) => (
-                      <li key={item.name}>
-                        <a href={item.href} className="text-sm leading-6 text-gray-300 hover:text-white">
-                          {item.name}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <div className="mt-10 md:mt-0">
-                  <h3 className="text-sm font-semibold leading-6 text-white">Support</h3>
-                  <ul role="list" className="mt-6 space-y-4">
-                    <li>
-                      <a href="#" className="text-sm leading-6 text-gray-300 hover:text-white">Contact</a>
-                    </li>
-                    <li>
-                      <a href="#" className="text-sm leading-6 text-gray-300 hover:text-white">FAQ</a>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="mt-16 border-t border-white/10 pt-8 sm:mt-20 lg:mt-24">
-            <p className="text-xs leading-5 text-gray-400">&copy; 2024 GymApp, Inc. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
+
     </div>
   );
 }
