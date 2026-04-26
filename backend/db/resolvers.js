@@ -7,6 +7,14 @@ const jwt = require('jsonwebtoken');
 const hasCheckedInToday = require('../lib/lib')
 require('dotenv').config(); // Para las variables de entorno como el JWT Secret
 
+// Función auxiliar para desactivar usuarios cuya membresía ha expirado
+const checkAndDeactivateUsers = async () => {
+  const now = new Date();
+  await User.updateMany(
+    { isActive: true, membershipExpiresAt: { $lt: now, $ne: null } },
+    { $set: { isActive: false } }
+  );
+};
 
 // Función para crear un token JWT
 const createToken = (user, secret, expiresIn) => {
@@ -24,6 +32,7 @@ const resolvers = {
      */
     getUsers: async () => {
       try {
+        await checkAndDeactivateUsers();
         const users = await User.find({});
 
         return users.map(user => ({
@@ -43,6 +52,7 @@ const resolvers = {
      * Resolver para obtener un usuario por su ID.
      */
     getUser: async (_, { id }) => {
+      await checkAndDeactivateUsers();
       // Comprobar si el usuario existe
       const user = await User.findById(id);
       if (!user) {
@@ -120,6 +130,7 @@ const resolvers = {
       if (!ctx.user) {
         throw new Error("No autenticado");
       }
+      await checkAndDeactivateUsers();
       return await User.findById(ctx.user.id);
     },
     findQRByAdmin: async (_, { id }) => {
@@ -170,6 +181,10 @@ const resolvers = {
       input.password = await bcryptjs.hash(password, salt);
 
       try {
+        // Aseguramos explícitamente que los usuarios recién creados estén inactivos y sin fecha
+        input.isActive = false;
+        input.membershipExpiresAt = null;
+
         // Paso 3: Guardar el nuevo usuario en la base de datos
         const user = new User(input);
         user.save(); // Guardar en MongoDB
@@ -297,11 +312,14 @@ const resolvers = {
 
       if (!user) throw new Error("ID de usuario erroneo");
 
-      // Lógica de Membresía: Si activamos al usuario, le damos 30 días
-      if (input.isActive === true) {
+      // Lógica de Membresía: Si activamos al usuario y antes estaba inactivo, le damos 30 días
+      if (input.isActive === true && user.isActive === false) {
         const now = new Date();
         const expirationDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // +30 días
         input.membershipExpiresAt = expirationDate;
+      } else if (input.isActive === false && user.isActive === true) {
+        // Opcional: si un administrador lo desactiva manualmente, podríamos removerle la fecha
+        input.membershipExpiresAt = null;
       }
 
       const userUpdated = await User.findByIdAndUpdate({ _id: id }, input, { new: true })

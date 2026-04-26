@@ -2,7 +2,7 @@
 import { CheckCircleIcon, XCircleIcon, CalendarIcon } from '@heroicons/react/24/outline';
 
 export default function MembershipStatus({ user }) {
-    console.log(user)
+
     if (!user) return null;
 
     const { membershipExpiresAt, isActive } = user;
