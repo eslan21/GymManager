@@ -1,6 +1,5 @@
 'use client'
-import { useRouter } from 'next/navigation';
-import {deleteCookies} from '@/app/lib/auth'
+import { useLogout } from '@/app/lib/useLogout';
 
 
 import {
@@ -15,7 +14,7 @@ import {
   
   export function Sidebar({ isOpen, setIsOpen }) {
 
-  const router = useRouter()
+  const sessionEnded = useLogout()
       
   const navItems = [
     { name: 'Dashboard', href: '/userdashboard', icon: <ChartBarIcon className="h-6 w-6" /> },
@@ -24,10 +23,6 @@ import {
     //{ name: 'Ajustes', href: '#', icon: <Cog6ToothIcon className="h-6 w-6" /> },
   ];
 
-  const sessionEnded = async ()=> {
-     await deleteCookies('token');
-    router.push('/login')
-  }
     return (
       <>
         {/* Fondo oscuro para móvil cuando el menú está abierto */}

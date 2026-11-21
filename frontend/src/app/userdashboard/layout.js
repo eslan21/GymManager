@@ -1,17 +1,10 @@
 'use client'
-import { useRouter } from 'next/navigation';
-import {isTokenExpired} from '@/app/lib/auth'
-import { Sidebar } from './components/Sidebar'; // -> Así lo importarías en tu proyecto
+import { Sidebar } from './components/Sidebar';
 import { Bars3Icon } from '@heroicons/react/24/outline';
-import { useState , useEffect} from 'react';
+import { useState } from 'react';
 
 export default  function DashboardLayout({ children }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-
-  const router = useRouter()
-
-  
-
 
   return (
     <div className="flex h-screen bg-gray-100 dark:bg-gray-900 overflow-hidden">

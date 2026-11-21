@@ -1,106 +1,66 @@
 import { NextResponse } from 'next/server'
-import { jwtVerify } from 'jose'
+import { verifySessionToken, SESSION_COOKIE } from '@/app/lib/session'
 
-const PUBLIC_PATHS = [
-  '/login',
-  '/signup',
-  '/register',
-  '/public',
-  '/api/public'
+// Rutas protegidas y el rol requerido para cada una
+const PROTECTED_ROUTES = [
+  { prefix: '/userdashboard', role: 'CLIENTE' },
+  { prefix: '/admindashboard', role: 'ADMIN' },
 ]
 
-// Función para redirigir a login 
-function redirigitTo(req) {
+const HOME_BY_ROLE = {
+  CLIENTE: '/userdashboard',
+  ADMIN: '/admindashboard',
+}
+
+// Función para redirigir a login
+function redirectToLogin(req) {
   const url = req.nextUrl.clone()
   url.pathname = '/login'
-  url.searchParams.set('redirectFrom', req.nextUrl.pathname) // ✅ Usar req.nextUrl.pathname
-  return NextResponse.redirect(url)
+  url.search = ''
+  url.searchParams.set('redirectFrom', req.nextUrl.pathname)
+  const res = NextResponse.redirect(url)
+  // Si había un token inválido/expirado, lo eliminamos
+  res.cookies.delete(SESSION_COOKIE)
+  return res
 }
 
 export async function middleware(req) {
   const { pathname } = req.nextUrl
+  const token = req.cookies.get(SESSION_COOKIE)?.value
 
-  // Ignorar archivos estáticos y _next
-  const isStatic =
-    pathname.startsWith('/_next') ||
-    pathname.startsWith('/static') ||
-    pathname.startsWith('/favicon') ||
-    pathname.match(/\.(png|jpg|jpeg|gif|svg|ico|css|js|map|txt|woff2?)$/)
-
-  if (isStatic) {
+  // Usuario ya autenticado que visita /login: lo enviamos a su panel
+  if (pathname === '/login' && token) {
+    const payload = await verifySessionToken(token)
+    const home = payload && HOME_BY_ROLE[payload.role]
+    if (home) {
+      return NextResponse.redirect(new URL(home, req.url))
+    }
     return NextResponse.next()
   }
 
-  // Permitir rutas públicas
-  if (PUBLIC_PATHS.some(p => pathname.startsWith(p))) {
-    const res = NextResponse.next()
-    res.headers.set('x-powered-by', 'Next.js + Middleware')
-    return res
+  const route = PROTECTED_ROUTES.find(r => pathname.startsWith(r.prefix))
+  if (!route) {
+    return NextResponse.next()
   }
-  /// ************ Verificando /userdashboard
-  const userURL = pathname.startsWith('/userdashboard')
-  if (userURL) {
-    const token = req.cookies.get('token')?.value
 
-    if (!token) {
-      return redirigitTo(req)
-    }
-
-    try {
-
-      const secret = new TextEncoder().encode(process.env.SECRETA)
-
-      // ✅ Agregar await
-      const { payload } = await jwtVerify(token, secret)
-
-      // ✅ Verificar payload.role
-      if (payload.role !== 'CLIENTE') {
-        return redirigitTo(req)
-      }
-
-      return NextResponse.next()
-
-    } catch (error) {
-      console.log('Token no válido', error)
-      return redirigitTo(req)
-    }
+  if (!token) {
+    return redirectToLogin(req)
   }
-  /// ************ Verificando /admindashboard
-  const adminURL = pathname.startsWith('/admindashboard');
-  if (adminURL) {
-    const token = req.cookies.get('token')?.value
 
-    if (!token) {
-      return redirigitTo(req)
-    }
-
-    try {
-
-      const secret = new TextEncoder().encode(process.env.SECRETA)
-
-      // ✅ Agregar await
-      const { payload } = await jwtVerify(token, secret)
-
-      // ✅ Verificar payload.role
-      if (payload.role !== 'ADMIN') {
-        return redirigitTo(req)
-      }
-
-      return NextResponse.next()
-
-    } catch (error) {
-      console.log('Token no válido', error)
-      return redirigitTo(req)
-    }
+  const payload = await verifySessionToken(token)
+  if (!payload) {
+    return redirectToLogin(req)
   }
-  // Respuesta por defecto
-  const res = NextResponse.next()
-  res.headers.set('x-powered-by', 'Next.js + Middleware')
-  return res
+
+  if (payload.role !== route.role) {
+    // Sesión válida pero rol equivocado: enviar a su propio panel si existe
+    const home = HOME_BY_ROLE[payload.role]
+    return home ? NextResponse.redirect(new URL(home, req.url)) : redirectToLogin(req)
+  }
+
+  return NextResponse.next()
 }
 
 export const config = {
-  matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|gif|svg|ico|css|js|map|txt|woff2?)).*)'
-  ]
+  matcher: ['/login', '/userdashboard/:path*', '/admindashboard/:path*'],
 }

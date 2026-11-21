@@ -1,5 +1,5 @@
 // ARCHIVO: context/AuthContext.js
-'use Client'
+'use client'
 import React, { createContext, useState } from 'react';
 
 
@@ -12,17 +12,11 @@ export const  AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null); // null = no logueado, {objeto de usuario} = logueado
   
-  const [userList, setUserList] = useState([]);
   const [searchInput, setSearchInput] = useState('');
-
-
-  
 
   const value = {
     user,
     setUser,
-    userList,
-    setUserList,
     searchInput,
     setSearchInput
 

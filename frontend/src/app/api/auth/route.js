@@ -1,43 +1,41 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers'
-import jwt from 'jsonwebtoken';
-import 'dotenv/config';
+import { verifySessionToken, SESSION_COOKIE, SESSION_MAX_AGE } from '@/app/lib/session';
 
-let SECRET = process.env.SECRETA;
-
-
+// Recibe el JWT del backend tras el login y lo guarda en una cookie httpOnly.
 export async function POST(req) {
-  
-    
-    
-    try {
-    const { token } = await req.json();
-   
-        if (!token) {
-            return NextResponse.json({ error: 'Token is required' }, { status: 400 });
-        }
-        //verificando valides del token
-        const dataToken = jwt.verify(token, SECRET)
-        
-       
-        
+  let token;
+  try {
+    ({ token } = await req.json());
+  } catch {
+    return NextResponse.json({ error: 'Cuerpo de la petición inválido' }, { status: 400 });
+  }
 
-        const response = NextResponse.json({ message: 'Token stored successfully' , dataToken});
-        response.cookies.set('token', token, {
-            httpOnly: true,
-            sameSite: 'strict',
-            path: '/',
-            maxAge: 60 * 60 
-        });
-        response.cookies.set('user', dataToken, {
-            httpOnly: true,
-            sameSite: 'strict',
-            path: '/',
-            maxAge: 60 * 60 
-        });
+  if (!token) {
+    return NextResponse.json({ error: 'Token is required' }, { status: 400 });
+  }
 
-        return response;
-    } catch (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+  // Verificando validez del token (firma + expiración)
+  const payload = await verifySessionToken(token);
+  if (!payload) {
+    return NextResponse.json({ error: 'Token inválido' }, { status: 401 });
+  }
+
+  // Solo devolvemos los datos no sensibles necesarios para redirigir
+  const dataToken = {
+    id: payload.id,
+    email: payload.email,
+    fullName: payload.fullName,
+    role: payload.role,
+  };
+
+  const response = NextResponse.json({ message: 'Token stored successfully', dataToken });
+  response.cookies.set(SESSION_COOKIE, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    path: '/',
+    maxAge: SESSION_MAX_AGE, // igual a la expiración del JWT
+  });
+
+  return response;
 }

@@ -2,10 +2,10 @@
 import { useFormik } from 'formik';
 import * as Yup from 'yup';
 import { useMutation, gql } from '@apollo/client'
-import { useState, useContext } from 'react';
-import { AuthContext } from '@/app/context/AuthContext';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { isUserLogin, getDataUser } from '@/app/lib/auth'
+import GoogleLoginButton from './GoogleLoginButton';
+import { startSession } from '@/app/lib/clientSession';
 
 const GET_TOKEN = gql`
 mutation loginUser($input: LoginInput!){
@@ -32,12 +32,6 @@ export default function LoginForm() {
   const [loginUser] = useMutation(GET_TOKEN);
   //Mensaje 
   const [message, setMessage] = useState(null);
-  const [logType, setLogType] = useState(null);
-
-
-  //contexnull
-  const context = useContext(AuthContext)
-
 
 
   // Esto asegura que el email sea válido y que la contraseña cumpla con los requisitos mínimos.
@@ -74,33 +68,8 @@ export default function LoginForm() {
         });
 
         if (data?.loginUser?.token) {
-          const { loginUser } = data;
-
-          /***** Construyendo fecth para las cookies */
-
-          const response = await fetch(process.env.NEXT_PUBLIC_VERCEL_URL
-            ? `/api/auth`
-            : 'http://localhost:3000/api/auth', {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ token: loginUser.token }),
-          });
-
-          if (response.ok) {
-            const result = await response.json();
-
-            //Redirigiendo
-            const { dataToken } = result;
-            if (dataToken.role === "CLIENTE") router.push('/userdashboard')
-
-            if (dataToken.role === "ADMIN") router.push('/admindashboard')
-
-          } else {
-            console.error('Error al enviar el token:', response.statusText);
-          }
-          /*************************************************** */
+          // Guarda las cookies y redirige según el rol
+          await startSession(data.loginUser.token, router);
         } else {
           console.error('Error: No se recibió un token.');
         }
@@ -198,6 +167,20 @@ export default function LoginForm() {
               </button>
             </div>
           </form>
+
+          {/* Separador + Login con Google */}
+          <div className="flex items-center gap-4 my-6">
+            <div className="flex-1 h-px bg-gray-700" />
+            <span className="text-gray-500 text-sm">o</span>
+            <div className="flex-1 h-px bg-gray-700" />
+          </div>
+
+          <GoogleLoginButton
+            onError={(msg) => {
+              setMessage(msg);
+              setTimeout(() => setMessage(null), 3000);
+            }}
+          />
 
           <p className="text-center text-gray-500 text-sm mt-8">
             ¿No tienes una cuenta? <a href="/register" className="font-medium text-indigo-400 hover:text-indigo-300">Regístrate</a>

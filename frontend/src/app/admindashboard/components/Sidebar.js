@@ -1,5 +1,5 @@
 'use client'
-import { useRouter } from 'next/navigation';
+import { useLogout } from '@/app/lib/useLogout';
 
 import {
   ChartBarIcon,
@@ -14,7 +14,7 @@ import {
 
 export function Sidebar({ isOpen, setIsOpen }) {
 
-  const router = useRouter()
+  const sessionEnded = useLogout()
 
   const navItems = [
     { name: 'Inicio', href: '/admindashboard/', icon: <ChartBarIcon className="h-6 w-6" /> },
@@ -22,10 +22,6 @@ export function Sidebar({ isOpen, setIsOpen }) {
     { name: 'Asistencia Diaria', href: '/admindashboard/attendance/', icon: <ClipboardDocumentCheckIcon className="h-6 w-6" /> },
   ];
 
-  const sessionEnded = () => {
-    localStorage.removeItem('token')
-    router.push('/login')
-  }
   return (
     <>
       {/* Fondo oscuro para móvil cuando el menú está abierto */}

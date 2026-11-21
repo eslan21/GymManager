@@ -1,174 +1,160 @@
 // Importar los modelos y las dependencias necesarias
-const User = require('../model/User'); // Asegúrate de que la ruta a tu modelo sea correcta
+const User = require('../model/User');
 const Attendance = require('../model/Attendance');
 const QRmodel = require('../model/QRmodel');
 const bcryptjs = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const hasCheckedInToday = require('../lib/lib')
+const { OAuth2Client } = require('google-auth-library');
+const {
+  MEMBERSHIP_ROLE,
+  MEMBERSHIP_DAYS,
+  addDays,
+  isMembershipExpired,
+  nextExpiration,
+  deactivateExpiredMemberships,
+} = require('../lib/membership');
 require('dotenv').config(); // Para las variables de entorno como el JWT Secret
 
-// Función auxiliar para desactivar usuarios cuya membresía ha expirado
-const checkAndDeactivateUsers = async () => {
-  const now = new Date();
-  await User.updateMany(
-    { isActive: true, membershipExpiresAt: { $lt: now, $ne: null } },
-    { $set: { isActive: false } }
-  );
-};
+// Cliente de Google reutilizado entre peticiones (cachea las claves públicas de Google)
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+// Duración del JWT. El frontend usa la misma duración para la cookie.
+const TOKEN_EXPIRES_IN = '24h';
 
 // Función para crear un token JWT
-const createToken = (user, secret, expiresIn) => {
+const createToken = (user) => {
   const { id, email, fullName, role } = user;
-  return jwt.sign({ id, email, fullName, role }, secret, { expiresIn });
+  return jwt.sign({ id, email, fullName, role }, process.env.JWT_SECRET, { expiresIn: TOKEN_EXPIRES_IN });
 };
+
+// ------------------ Helpers de autorización ------------------
+
+// Exige un usuario autenticado (token válido)
+const requireUser = (ctx) => {
+  if (!ctx.user?.id) {
+    throw new Error('No autenticado. Inicia sesión.');
+  }
+  return ctx.user;
+};
+
+// Exige un ADMIN. El rol se comprueba en la BD para que un usuario degradado
+// no conserve permisos mientras su token siga vigente.
+const requireAdmin = async (ctx) => {
+  const { id } = requireUser(ctx);
+  const admin = await User.findById(id).select('role');
+  if (!admin || admin.role !== 'ADMIN') {
+    throw new Error('Acceso denegado. Se requieren permisos de administrador.');
+  }
+  return admin;
+};
+
+const startOfToday = () => {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+
+const endOfToday = () => {
+  const d = new Date();
+  d.setHours(23, 59, 59, 999);
+  return d;
+};
+
+const toISO = (value) => (value ? new Date(value).toISOString() : null);
 
 // Los resolvers son las funciones que se ejecutan para cada query o mutation
 const resolvers = {
+  // Fechas del usuario en formato ISO 8601 (fáciles de parsear con new Date())
+  User: {
+    id: (user) => (user.id || user._id)?.toString(),
+    createdAt: (user) => toISO(user.createdAt),
+    membershipExpiresAt: (user) => toISO(user.membershipExpiresAt),
+  },
+
   Query: {
-    /**
-     * Resolver para obtener todos los usuarios.
-     * En una aplicación real, deberías proteger esta consulta para que solo
-     * los administradores puedan acceder a ella.
-     */
-    getUsers: async () => {
-      try {
-        await checkAndDeactivateUsers();
-        const users = await User.find({});
-
-        return users.map(user => ({
-          ...user.toObject(),
-          id: user._id.toString(),
-          createdAt: user.createdAt ? user.createdAt.toISOString() : null
-        }));
-
-
-
-      } catch (error) {
-        console.log(error);
-        throw new Error('Hubo un error al obtener los usuarios');
-      }
+    // Lista de usuarios (solo ADMIN)
+    getUsers: async (_, __, ctx) => {
+      await requireAdmin(ctx);
+      await deactivateExpiredMemberships();
+      return User.find({}).sort({ createdAt: -1 });
     },
-    /**
-     * Resolver para obtener un usuario por su ID.
-     */
-    getUser: async (_, { id }) => {
-      await checkAndDeactivateUsers();
-      // Comprobar si el usuario existe
+
+    // Un usuario por ID (solo ADMIN)
+    getUser: async (_, { id }, ctx) => {
+      await requireAdmin(ctx);
+      await deactivateExpiredMemberships();
       const user = await User.findById(id);
       if (!user) {
         throw new Error('Usuario no encontrado');
       }
-
-      return user
-
-
+      return user;
     },
-    getAttendancesByUser: async (_, { }, ctx) => {
-      if (!ctx.user) {
-        throw new Error("No hay usuario Registrado");
-      };
-      const { user } = ctx;
 
-
-      const userExists = await User.findById(user.id);
-
-      if (!userExists) {
-        throw new Error('Usuario no encontrado');
-      }
-      const attend = await Attendance.find({ user: user.id }).populate('user').sort({ checkIn: -1 });
-
-      return attend
+    // Historial de asistencia del usuario autenticado
+    getAttendancesByUser: async (_, __, ctx) => {
+      const { id } = requireUser(ctx);
+      return Attendance.find({ user: id }).populate('user').sort({ checkIn: -1 });
     },
-    getDailyAttendance: async () => {
-      const startOfDay = new Date();
-      startOfDay.setHours(0, 0, 0, 0);
 
-      const endOfDay = new Date();
-      endOfDay.setHours(23, 59, 59, 999);
-
+    // Asistencia del día (solo ADMIN)
+    getDailyAttendance: async (_, __, ctx) => {
+      await requireAdmin(ctx);
       try {
-        const relativeAttendance = await Attendance.find({
-          checkIn: { $gte: startOfDay, $lte: endOfDay }
+        return await Attendance.find({
+          checkIn: { $gte: startOfToday(), $lte: endOfToday() }
         }).populate('user').sort({ checkIn: -1 });
-
-        return relativeAttendance;
       } catch (error) {
         console.log(error);
         throw new Error('Error al obtener la asistencia diaria');
       }
     },
+
     //-*********************    QR   ********************
-    findQR: async (_, { }, ctx) => {
-      // 1. Obtenemos el ID del usuario desde el context
-      // El path exacto (context.user._id) depende de cómo configures tu servidor
-      const userId = ctx.user?.id;
-
-      // 2. Validamos que el usuario esté autenticado
-      if (!userId) {
-        throw new Error("Acceso denegado. Debes iniciar sesión para ver tu QR.");
-      }
-
-      try {
-        // 3. Buscamos el QR que pertenezca al usuario del contexto
-        const qrFound = await QRmodel.findOne({ user: userId }).populate('user');
-
-        // 4. Si no se encuentra, informamos al usuario
-        if (!qrFound) {
-          throw new Error("No se encontró un código QR para el usuario actual.");
-        }
-
-
-        return qrFound;
-
-      } catch (error) {
-
-        // Relanzamos el error para que GraphQL lo maneje
-        throw new Error("Ocurrió un error al buscar el código QR.");
-      }
+    findQR: async (_, __, ctx) => {
+      const { id } = requireUser(ctx);
+      // Devuelve null si aún no hay QR; el cliente generará uno nuevo
+      return QRmodel.findOne({ user: id }).populate('user');
     },
+
+    // Datos del usuario autenticado
     getMe: async (_, __, ctx) => {
-      if (!ctx.user) {
-        throw new Error("No autenticado");
-      }
-      await checkAndDeactivateUsers();
-      return await User.findById(ctx.user.id);
+      const { id } = requireUser(ctx);
+      await deactivateExpiredMemberships();
+      return User.findById(id);
     },
-    findQRByAdmin: async (_, { id }) => {
-      let qr;
-      if (!id) throw new Error("No se proporciono id");
 
+    // Busca un QR por su ID completo o por sus últimos 5 caracteres (solo ADMIN)
+    findQRByAdmin: async (_, { id }, ctx) => {
+      await requireAdmin(ctx);
+      const code = (id || '').trim();
+      if (!code) throw new Error('No se proporcionó un código');
 
-      try {
-
-        if (id.length > 5) {
-          qr = await QRmodel.findById(id).populate('user');
-          console.log(qr)
-        }
-        // Si tiene 5 caracteres o menos, buscar por los últimos 5 dígitos
-        else {
-          // Obtener todos los QRs y filtrar por los últimos 5 caracteres del _id
-          const allQRs = await QRmodel.find().populate('user');
-          qr = allQRs.find(item => (item._id.toString().slice(-5) == id))
-          console.log(qr)
-
-        }
-
-        if (!qr) throw new Error('No se ha Generado Id por parte del usuario')
-        return qr
-        //return {qr, ok : true}
+      let qr = null;
+      if (/^[0-9a-f]{24}$/i.test(code)) {
+        qr = await QRmodel.findById(code).populate('user');
+      } else if (/^[0-9a-f]{1,5}$/i.test(code)) {
+        // Coincidencia por sufijo del _id, resuelta en la base de datos
+        qr = await QRmodel.findOne({
+          $expr: {
+            $regexMatch: {
+              input: { $toString: '$_id' },
+              regex: `${code.toLowerCase()}$`,
+            },
+          },
+        }).populate('user');
       }
-      catch (error) {
-        console.log(error)
-      }
-    }
 
+      if (!qr) throw new Error('Código inválido o QR no generado por el usuario');
+      return qr;
+    },
   },
+
   Mutation: {
     /**
-     * Resolver para registrar un nuevo usuario.
+     * Registro público. Siempre crea un CLIENTE inactivo: un ADMIN debe activarlo.
      */
     newUser: async (_, { input }) => {
-      const { email, password } = input;
+      const email = input.email.toLowerCase().trim();
 
       // Paso 1: Revisar si el usuario ya existe en la base de datos
       const userExists = await User.findOne({ email });
@@ -178,88 +164,146 @@ const resolvers = {
 
       // Paso 2: Hashear el password
       const salt = await bcryptjs.genSalt(10);
-      input.password = await bcryptjs.hash(password, salt);
+      const password = await bcryptjs.hash(input.password, salt);
 
       try {
-        // Aseguramos explícitamente que los usuarios recién creados estén inactivos y sin fecha
-        input.isActive = false;
-        input.membershipExpiresAt = null;
-
-        // Paso 3: Guardar el nuevo usuario en la base de datos
-        const user = new User(input);
-        user.save(); // Guardar en MongoDB
+        // Paso 3: Guardar el nuevo usuario. El rol y el estado NO se toman del cliente.
+        const user = new User({
+          fullName: input.fullName,
+          email,
+          password,
+          phone: input.phone || null,
+          birth: input.birth,
+          role: MEMBERSHIP_ROLE,
+          isActive: false,
+          membershipExpiresAt: null,
+        });
+        await user.save();
         return user;
-
-
-
-
       } catch (error) {
         console.log(error);
         throw new Error('Hubo un error al crear el nuevo usuario');
       }
     },
+
     /**
-     * Resolver para el login de usuario.
+     * Login con email y contraseña.
      */
     loginUser: async (_, { input }) => {
-      const { email, password } = input;
+      const email = input.email.toLowerCase().trim();
 
       // Paso 1: Verificar si el usuario existe
       const user = await User.findOne({ email });
       if (!user) {
-        throw new Error('El usuario no existe.');
+        throw new Error('Correo o contraseña incorrectos.');
       }
 
+      // Paso 2: Las cuentas creadas con Google no tienen contraseña
+      if (!user.password) {
+        throw new Error('Esta cuenta usa Google. Inicia sesión con el botón de Google.');
+      }
 
-      //Paso 3: Verificar si el password es correcto
-      const correctPassword = await bcryptjs.compare(password, user.password);
+      // Paso 3: Verificar si el password es correcto
+      const correctPassword = await bcryptjs.compare(input.password, user.password);
       if (!correctPassword) {
-        throw new Error('La contraseña es incorrecta.');
+        throw new Error('Correo o contraseña incorrectos.');
       }
 
       // Paso 4: Si todo es correcto, crear y firmar el token
       return {
-        token: createToken(user, process.env.JWT_SECRET, "24h"),
+        token: createToken(user),
         usuario: user
       };
-
-
-
     },
-    //***************CheckIn********************* */
-    checkIn: async (_, { userId }) => {
+
+    /**
+     * Login con Google.
+     * Verifica el ID token emitido por Google, y busca, vincula o crea al usuario.
+     */
+    loginWithGoogle: async (_, { idToken }) => {
+      if (!process.env.GOOGLE_CLIENT_ID) {
+        throw new Error('El inicio de sesión con Google no está configurado.');
+      }
+
+      // Paso 1: Verificar la firma, audiencia y expiración del token con Google
+      let payload;
+      try {
+        const ticket = await googleClient.verifyIdToken({
+          idToken,
+          audience: process.env.GOOGLE_CLIENT_ID,
+        });
+        payload = ticket.getPayload();
+      } catch (error) {
+        console.log(error);
+        throw new Error('Token de Google inválido.');
+      }
+
+      const { sub: googleId, email, email_verified, name, picture } = payload || {};
+      if (!email || !email_verified) {
+        throw new Error('El correo de Google no está verificado.');
+      }
+
+      // Paso 2: Buscar por googleId o, si no existe, por email para vincular la cuenta
+      let user = await User.findOne({ googleId });
+      if (!user) {
+        user = await User.findOne({ email: email.toLowerCase() });
+
+        if (user) {
+          // Vincular una cuenta existente (registrada con email/contraseña) a Google
+          user.googleId = googleId;
+          if (!user.avatar && picture) user.avatar = picture;
+          await user.save();
+        } else {
+          // Paso 3: Crear un nuevo cliente, inactivo hasta que un administrador lo active
+          user = new User({
+            fullName: name || email.split('@')[0],
+            email,
+            googleId,
+            avatar: picture || null,
+            role: MEMBERSHIP_ROLE,
+            isActive: false,
+            membershipExpiresAt: null,
+          });
+          await user.save();
+        }
+      }
+
+      return {
+        token: createToken(user),
+        usuario: user
+      };
+    },
+
+    //***************CheckIn (solo ADMIN)********************* */
+    checkIn: async (_, { userId }, ctx) => {
+      await requireAdmin(ctx);
+
       const user = await User.findById(userId);
       if (!user) {
         throw new Error('Usuario no encontrado.');
       }
 
-      // Validar Membresía
-      if (user.membershipExpiresAt) {
-        const expirationDate = new Date(parseInt(user.membershipExpiresAt));
-        const now = new Date();
-
-        if (now > expirationDate) {
-          // Si venció, desactivamos al usuario
-          if (user.isActive) {
-            user.isActive = false;
-            await user.save();
-          }
-          throw new Error('La membresía ha vencido. Por favor renueva tu suscripción.');
+      // Validar membresía (solo clientes)
+      if (user.role === MEMBERSHIP_ROLE && isMembershipExpired(user)) {
+        if (user.isActive) {
+          user.isActive = false;
+          await user.save();
         }
+        throw new Error('La membresía ha vencido. Por favor renueva tu suscripción.');
       }
 
       if (!user.isActive) {
         throw new Error('Usuario inactivo. Contacta al administrador.');
       }
 
-
-      const attendance = await Attendance.find({ user: userId })
-      //verificamos si el usuario ya entro al gimnasio
-      if (hasCheckedInToday(attendance)) {
+      // Verificamos si el usuario ya entró hoy al gimnasio
+      const alreadyIn = await Attendance.exists({
+        user: userId,
+        checkIn: { $gte: startOfToday(), $lte: endOfToday() },
+      });
+      if (alreadyIn) {
         throw new Error("El usuario ya está dentro del gimnasio.");
-
       }
-
 
       const newAttendance = new Attendance({ user: userId });
       await newAttendance.save();
@@ -267,84 +311,112 @@ const resolvers = {
       // Populamos el documento ANTES de devolverlo para que la respuesta de la mutación sea completa.
       return newAttendance.populate('user');
     },
+
     //---------------------------------------- QR Functions-----------------------------------------------------------
-    qrGenerator: async (_, { }, ctx) => {
+    qrGenerator: async (_, __, ctx) => {
+      const { id } = requireUser(ctx);
 
-      const { user } = ctx;
-
-      const qrUserexisted = await QRmodel.findOne({ user: user.id })
-
-      //Validando que el usuario no tenga qr creado
+      // Validando que el usuario no tenga qr creado
+      const qrUserexisted = await QRmodel.findOne({ user: id });
       if (qrUserexisted) {
-
         throw new Error("Ya existe un QR para este usuario");
-
       }
 
-      //datos de usuario
-
-      let qrdata = {
-        user: user.id,
-        expiresAt: new Date(new Date().getTime() + 60 * 60 * 1000)
-      }
-      const newQR = new QRmodel(qrdata)
+      const newQR = new QRmodel({
+        user: id,
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000)
+      });
 
       try {
-        // 1. Guardamos el nuevo documento QR
-        let resultado = await newQR.save();
-
-        // 2. Buscamos ESE MISMO documento por su _id y poblamos el campo 'user'
-        // Usamos findById que es un atajo para findOne({ _id: ... })
-        const resultadoPoblado = await QRmodel.findById(resultado._id).populate('user');
-
-
-        return resultadoPoblado;
-
+        const resultado = await newQR.save();
+        return resultado.populate('user');
       } catch (error) {
         console.log('Error al guardar QR', error);
-        // Es una buena práctica devolver el error o lanzarlo
         throw new Error('No se pudo generar el código QR.');
       }
-
     },
-    userUpdate: async (_, { id, input }, ctx) => {
-      const user = await User.findOne({ _id: id });
 
+    /**
+     * Actualizar usuario (solo ADMIN).
+     * Membresía: al activar a un CLIENTE se le asignan 30 días desde la activación;
+     * al desactivarlo se elimina la fecha de vencimiento.
+     */
+    userUpdate: async (_, { id, input }, ctx) => {
+      const admin = await requireAdmin(ctx);
+
+      const user = await User.findById(id);
       if (!user) throw new Error("ID de usuario erroneo");
 
-      // Lógica de Membresía: Si activamos al usuario y antes estaba inactivo, le damos 30 días
-      if (input.isActive === true && user.isActive === false) {
-        const now = new Date();
-        const expirationDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // +30 días
-        input.membershipExpiresAt = expirationDate;
-      } else if (input.isActive === false && user.isActive === true) {
-        // Opcional: si un administrador lo desactiva manualmente, podríamos removerle la fecha
-        input.membershipExpiresAt = null;
+      // Evitar que un admin se quite a sí mismo el acceso
+      if (admin.id === user.id && input.role && input.role !== 'ADMIN') {
+        throw new Error('No puedes quitarte tu propio rol de administrador.');
       }
 
-      const userUpdated = await User.findByIdAndUpdate({ _id: id }, input, { new: true })
+      const update = { ...input };
 
-      return userUpdated;
+      // Nunca guardar contraseñas en texto plano
+      if (update.password) {
+        update.password = await bcryptjs.hash(update.password, await bcryptjs.genSalt(10));
+      } else {
+        delete update.password;
+      }
+      if (update.email) update.email = update.email.toLowerCase().trim();
 
+      // Lógica de membresía
+      const finalRole = update.role ?? user.role;
+      const finalActive = update.isActive ?? user.isActive;
 
+      if (finalRole !== MEMBERSHIP_ROLE || !finalActive) {
+        // Sin membresía para no-clientes o clientes inactivos
+        update.membershipExpiresAt = null;
+      } else if (!user.isActive || !user.membershipExpiresAt || isMembershipExpired(user)) {
+        // Activación (o cliente activo sin fecha válida): 30 días desde ahora
+        update.membershipExpiresAt = addDays(new Date(), MEMBERSHIP_DAYS);
+      }
+
+      try {
+        return await User.findByIdAndUpdate(id, update, { new: true, runValidators: true });
+      } catch (error) {
+        if (error.code === 11000) {
+          throw new Error('El correo electrónico ya está registrado.');
+        }
+        console.log(error);
+        throw new Error('No se pudo actualizar el usuario.');
+      }
     },
-    //***************CheckOut********************* */
-    checkout: async (_, { userId }) => {
+
+    /**
+     * Renueva la membresía de un cliente por 30 días (solo ADMIN).
+     * Si aún está vigente, los días se suman al vencimiento actual.
+     */
+    renewMembership: async (_, { id }, ctx) => {
+      await requireAdmin(ctx);
+
+      const user = await User.findById(id);
+      if (!user) throw new Error('Usuario no encontrado.');
+      if (user.role !== MEMBERSHIP_ROLE) {
+        throw new Error('Solo los clientes tienen membresía.');
+      }
+
+      user.membershipExpiresAt = nextExpiration(user);
+      user.isActive = true;
+      await user.save();
+      return user;
+    },
+
+    //***************CheckOut (solo ADMIN)********************* */
+    checkout: async (_, { userId }, ctx) => {
+      await requireAdmin(ctx);
+
       const user = await User.findById(userId);
       if (!user) {
         throw new Error('Usuario no encontrado.');
       }
 
       // Buscar el último registro de asistencia de HOY que no tenga checkout
-      const startOfDay = new Date();
-      startOfDay.setHours(0, 0, 0, 0);
-
-      const endOfDay = new Date();
-      endOfDay.setHours(23, 59, 59, 999);
-
       const attendance = await Attendance.findOne({
         user: userId,
-        checkIn: { $gte: startOfDay, $lte: endOfDay },
+        checkIn: { $gte: startOfToday(), $lte: endOfToday() },
         checkOut: null
       }).sort({ checkIn: -1 });
 
@@ -357,7 +429,6 @@ const resolvers = {
 
       return attendance.populate('user');
     }
-
   },
 };
 

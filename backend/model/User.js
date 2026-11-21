@@ -13,9 +13,19 @@ const userSchema = new mongoose.Schema({
     lowercase: true,
     trim: true
   },
+  // Los usuarios que se registran con Google no tienen contraseña ni fecha de nacimiento
   password: {
     type: String,
-    required: true,
+    required: function () { return !this.googleId; },
+    default: null
+  },
+  googleId: {
+    type: String,
+    unique: true,
+    sparse: true // Permite muchos documentos sin googleId
+  },
+  avatar: {
+    type: String,
     default: null
   },
   phone: {
@@ -24,7 +34,8 @@ const userSchema = new mongoose.Schema({
   },
   birth: {
     type: String,
-    required: true
+    required: function () { return !this.googleId; },
+    default: null
   },
   role: {
     type: String,

@@ -10,3 +10,5 @@ frontend/.env*
 
 # env files (can opt-in for committing if needed)
 backend/.env*
+.agents
+skills-lock.json

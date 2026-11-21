@@ -1,7 +1,8 @@
 'use client'
 import {gql, useQuery} from '@apollo/client'
-import { useContext, useEffect } from "react";
+import { useContext } from "react";
 import { AuthContext} from '@/app/context/AuthContext'
+import { getMembershipInfo } from '@/app/lib/membership'
 
 const GET_USERTS = gql`
   query getUsers{
@@ -14,32 +15,48 @@ const GET_USERTS = gql`
       role
       isActive
       createdAt
+      membershipExpiresAt
     }
   }
 `;
 
-const UserList = () => {
-
-  function filterUsersByName(users, searchInput = '') {
-    const searchTerm = searchInput.toLowerCase().trim();
-    if (!searchTerm) {
-      return users;
-    }
-    return users.filter(user =>
-      user.fullName.toLowerCase().includes(searchTerm)
-    );
+function filterUsersByName(users, searchInput = '') {
+  const searchTerm = searchInput.toLowerCase().trim();
+  if (!searchTerm) {
+    return users;
   }
+  return users.filter(user =>
+    user.fullName.toLowerCase().includes(searchTerm)
+  );
+}
 
-  const context = useContext(AuthContext);
-  const {userList, setUserList, searchInput} = context;
+// Celda con vencimiento y días restantes de la membresía
+function MembershipCell({ user }) {
+  if (user.role !== 'CLIENTE') {
+    return <span className="text-gray-600">—</span>;
+  }
+  const { expiresAt, label, daysRemaining, isExpired } = getMembershipInfo(user);
+  if (!expiresAt) {
+    return <span className="text-gray-500">Sin membresía</span>;
+  }
+  const color = isExpired ? 'text-rose-400' : daysRemaining <= 3 ? 'text-amber-400' : 'text-gray-300';
+  return (
+    <div>
+      <div className={color}>{label}</div>
+      <div className="text-xs text-gray-500 mt-1">
+        {isExpired ? 'Vencida' : `${daysRemaining} día${daysRemaining === 1 ? '' : 's'} restante${daysRemaining === 1 ? '' : 's'}`}
+      </div>
+    </div>
+  );
+}
+
+const UserList = () => {
+  const { searchInput } = useContext(AuthContext);
   
-  const {data, loading, error} = useQuery(GET_USERTS);
-  
-  useEffect(() => {
-    if(data?.getUsers) {
-        setUserList(filterUsersByName(data.getUsers , searchInput));
-    }
-  }, [data, searchInput]);
+  const {data, loading, error} = useQuery(GET_USERTS, { fetchPolicy: 'cache-and-network' });
+
+  // Estado derivado: se calcula en el render, sin efectos ni estado duplicado
+  const userList = data?.getUsers ? filterUsersByName(data.getUsers, searchInput) : [];
   
   if(loading) return (
     <div className="flex justify-center items-center h-64 w-full">
@@ -63,6 +80,7 @@ const UserList = () => {
               <th className="px-6 py-5 font-semibold">Contact</th>
               <th className="px-6 py-5 font-semibold">Role</th>
               <th className="px-6 py-5 font-semibold">Status</th>
+              <th className="px-6 py-5 font-semibold">Membership</th>
               <th className="px-6 py-5 font-semibold">Signed Up</th>
               <th className="px-6 py-5 font-semibold text-right">Actions</th>
             </tr>
@@ -104,6 +122,9 @@ const UserList = () => {
                     {user.isActive ? "Active" : "Inactive"}
                   </span>
                 </td>
+                <td className="px-6 py-4 text-sm">
+                  <MembershipCell user={user} />
+                </td>
                 <td className="px-6 py-4 text-sm text-gray-400">
                   {user.createdAt ? new Date(user.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'}
                 </td>
@@ -122,7 +143,7 @@ const UserList = () => {
             ))}
             {userList?.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-6 py-12 text-center">
+                <td colSpan={7} className="px-6 py-12 text-center">
                   <div className="flex flex-col items-center justify-center py-6 text-gray-500">
                     <svg className="w-12 h-12 mb-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />

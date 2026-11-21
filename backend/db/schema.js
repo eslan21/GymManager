@@ -40,7 +40,9 @@ const typeDefs = gql`
     role: Role
     isActive: Boolean
     createdAt: String
+    # Fecha ISO 8601 de vencimiento de la membresía (null si no está activa)
     membershipExpiresAt: String
+    avatar: String
   }
 
   # El tipo de respuesta para una autenticación exitosa.
@@ -130,6 +132,11 @@ const typeDefs = gql`
     Autentica a un usuario y devuelve un token de acceso.
     """
     loginUser(input: LoginInput!): AuthPayload
+
+    """
+    Autentica (o registra) a un usuario usando un ID token de Google Identity Services.
+    """
+    loginWithGoogle(idToken: String!): AuthPayload
     """
     Registra la entrada (check-in) de un usuario al gimnasio.
     """
@@ -143,8 +150,13 @@ const typeDefs = gql`
     #Guardando QR
     qrGenerator : QRGenerated
    
-    #Actualizar Usuario
+    #Actualizar Usuario (solo ADMIN). Activar a un CLIENTE le da 30 días de membresía.
     userUpdate(id:ID!, input:UpdateUserInput!): User
+
+    """
+    Renueva la membresía de un cliente por 30 días (solo ADMIN).
+    """
+    renewMembership(id: ID!): User
 
     
     

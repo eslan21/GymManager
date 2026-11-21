@@ -1,6 +1,5 @@
 import SearchBar from "./components/SearchBar"
 import UserList from '@/app/admindashboard/components/UserList'
-import esTokenDeAdmin from '@/app/lib/auth'
 
 export default function page() {
   return (
